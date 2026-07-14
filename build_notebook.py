@@ -111,16 +111,24 @@ for q in ["Who are you?", "What services do you offer?", "How much does a chatbo
     print("A:", tokenizer.decode(out[0][inputs.shape[1]:], skip_special_tokens=True).strip())
     print("-" * 60)'''),
 
-code("""# Step 7: Export to GGUF (q4_k_m) and download (~0.8 GB)
+code("""# Step 7: Export to GGUF and download
 model.save_pretrained_gguf("safetech-ft", tokenizer, quantization_method="q4_k_m")
 
-import glob, shutil
-gguf = glob.glob("safetech-ft/*.gguf")[0]
-shutil.move(gguf, "safetech-ft.gguf")
-print("GGUF ready:", "safetech-ft.gguf")
+import glob, os, shutil
+found = sorted(glob.glob("/content/**/*.gguf", recursive=True),
+               key=os.path.getsize, reverse=True)
+print("Found:", found)
+if not found:  # fallback: convert manually via llama.cpp
+    model.save_pretrained_merged("merged", tokenizer, save_method="merged_16bit")
+    os.system("git clone --depth 1 https://github.com/ggml-org/llama.cpp")
+    os.system("pip install -q ./llama.cpp/gguf-py mistral-common")
+    os.system("python llama.cpp/convert_hf_to_gguf.py merged"
+              " --outfile /content/safetech-ft.gguf --outtype q8_0")
+else:
+    shutil.move(found[0], "/content/safetech-ft.gguf")
 
 from google.colab import files
-files.download("safetech-ft.gguf")"""),
+files.download("/content/safetech-ft.gguf")"""),
 
 md("""## Done!
 When **safetech-ft.gguf** finishes downloading, move it to
