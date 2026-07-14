@@ -1,0 +1,42 @@
+name: train
+on:
+  workflow_dispatch:
+    inputs:
+      smoke:
+        description: "Quick 2-step pipeline test"
+        required: false
+        default: "false"
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install PyTorch (CPU) and training libs
+        run: |
+          pip install --quiet torch --index-url https://download.pytorch.org/whl/cpu
+          pip install --quiet transformers peft datasets accelerate sentencepiece
+
+      - name: Train
+        env:
+          SMOKE: ${{ inputs.smoke == 'true' && '1' || '0' }}
+        run: python train_cpu.py
+
+      - name: Convert to GGUF (q8_0)
+        run: |
+          git clone --depth 1 https://github.com/ggml-org/llama.cpp
+          pip install --quiet ./llama.cpp/gguf-py mistral-common
+          python llama.cpp/convert_hf_to_gguf.py merged \
+            --outfile safetech-ft.gguf --outtype q8_0
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: safetech-ft
+          path: safetech-ft.gguf
+          retention-days: 7
